@@ -8,13 +8,14 @@
  * - GenerateAdVideoOutput - The return type for the generateAdVideo function.
  */
 
-import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
-import {MediaPart} from 'genkit';
+import { ai } from '@/ai/genkit';
+import { z } from 'genkit';
+import { MediaPart } from 'genkit';
 
 const GenerateAdVideoInputSchema = z.object({
   prompt: z.string().describe('The prompt to generate the ad video.'),
 });
+
 export type GenerateAdVideoInput = z.infer<typeof GenerateAdVideoInputSchema>;
 
 const GenerateAdVideoOutputSchema = z.object({
@@ -24,6 +25,7 @@ const GenerateAdVideoOutputSchema = z.object({
       'The generated ad video as a data URI (video/mp4;base64,...).'
     ),
 });
+
 export type GenerateAdVideoOutput = z.infer<typeof GenerateAdVideoOutputSchema>;
 
 export async function generateAdVideo(
@@ -38,8 +40,8 @@ const generateAdVideoFlow = ai.defineFlow(
     inputSchema: GenerateAdVideoInputSchema,
     outputSchema: GenerateAdVideoOutputSchema,
   },
-  async input => {
-    let {operation} = await ai.generate({
+  async (input) => {
+    let { operation } = await ai.generate({
       model: 'googleai/veo-2.0-generate-001',
       prompt: input.prompt,
       config: {
@@ -63,27 +65,34 @@ const generateAdVideoFlow = ai.defineFlow(
       throw new Error('failed to generate video: ' + operation.error.message);
     }
 
-    const video = operation.output?.message?.content.find(p => !!p.media);
-    if (!video) {
+    const video = operation.output?.message?.content?.find(p => !!p.media);
+    if (!video || !video.media) {
       throw new Error('Failed to find the generated video');
     }
 
     const videoDataUri = await downloadVideo(video as MediaPart);
 
-    return {videoDataUri};
+    return { videoDataUri };
   }
 );
 
 async function downloadVideo(video: MediaPart): Promise<string> {
   const fetch = (await import('node-fetch')).default;
+
   if (!process.env.GEMINI_API_KEY) {
     throw new Error(
       'process.env.GEMINI_API_KEY is not defined. Cannot download video.'
     );
   }
+
+  if (!video.media?.url) {
+    throw new Error('Video media URL is not available');
+  }
+
   const videoDownloadResponse = await fetch(
-    `${video.media!.url}&key=${process.env.GEMINI_API_KEY}`
+    `${video.media.url}&key=${process.env.GEMINI_API_KEY}`
   );
+
   if (
     !videoDownloadResponse ||
     videoDownloadResponse.status !== 200 ||
@@ -91,8 +100,11 @@ async function downloadVideo(video: MediaPart): Promise<string> {
   ) {
     throw new Error('Failed to fetch video');
   }
+
   const buffer = await videoDownloadResponse.arrayBuffer();
   const base64 = Buffer.from(buffer).toString('base64');
+  
+  const contentType = video.media.contentType || 'video/mp4';
 
-  return `data:video/mp4;base64,${base64}`;
+  return `data:${contentType};base64,${base64}`;
 }
