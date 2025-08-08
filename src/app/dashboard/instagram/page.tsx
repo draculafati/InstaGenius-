@@ -3,7 +3,7 @@ import { Bot } from "lucide-react";
 
 export default function InstagramAdGeneratorPage() {
   return (
-    <div className="relative min-h-screen w-full overflow-hidden">
+    <div className="relative min-h-screen w-full overflow-y-auto">
       <div className="absolute inset-0 -z-10 h-full w-full bg-gradient-to-r from-primary via-accent to-secondary"></div>
       <div className="container mx-auto px-4 py-12 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-3xl">
