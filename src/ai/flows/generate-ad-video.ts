@@ -10,8 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import * as fs from 'fs';
-import { Readable } from 'stream';
+import { MediaPart } from 'genkit/cohere';
 
 const GenerateAdVideoInputSchema = z.object({
   prompt: z.string().describe('The prompt to generate the ad video.'),
@@ -68,13 +67,13 @@ const generateAdVideoFlow = ai.defineFlow(
       throw new Error('Failed to find the generated video');
     }
 
-    const videoDataUri = await downloadVideo(video);
+    const videoDataUri = await downloadVideo(video as MediaPart);
 
     return { videoDataUri };
   }
 );
 
-async function downloadVideo(video: any): Promise<string> {
+async function downloadVideo(video: MediaPart): Promise<string> {
   const fetch = (await import('node-fetch')).default;
   if (!process.env.GEMINI_API_KEY) {
     throw new Error(
