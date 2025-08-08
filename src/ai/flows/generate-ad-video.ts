@@ -53,7 +53,8 @@ const generateAdVideoFlow = ai.defineFlow(
     }
 
     // Wait until the operation completes. Note that this may take some time, maybe even up to a minute. Design the UI accordingly.
-    while (!operation.done) {\n      operation = await ai.checkOperation(operation);
+    while (!operation.done) {
+      operation = await ai.checkOperation(operation);
       // Sleep for 5 seconds before checking again.
       await new Promise((resolve) => setTimeout(resolve, 5000));
     }
