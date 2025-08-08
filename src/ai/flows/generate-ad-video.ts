@@ -10,7 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { MediaPart } from 'genkit/cohere';
+import { MediaPart } from 'genkit';
 
 const GenerateAdVideoInputSchema = z.object({
   prompt: z.string().describe('The prompt to generate the ad video.'),
