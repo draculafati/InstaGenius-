@@ -10,7 +10,7 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import { MediaPart } from 'genkit';
+import {MediaPart} from 'genkit';
 
 const GenerateAdVideoInputSchema = z.object({
   prompt: z.string().describe('The prompt to generate the ad video.'),
@@ -19,14 +19,16 @@ export type GenerateAdVideoInput = z.infer<typeof GenerateAdVideoInputSchema>;
 
 const GenerateAdVideoOutputSchema = z.object({
   videoDataUri: z
-    .string() // Consider a more specific validation if possible
+    .string()
     .describe(
       'The generated ad video as a data URI (video/mp4;base64,...).'
     ),
 });
 export type GenerateAdVideoOutput = z.infer<typeof GenerateAdVideoOutputSchema>;
 
-export async function generateAdVideo(input: GenerateAdVideoInput): Promise<GenerateAdVideoOutput> {
+export async function generateAdVideo(
+  input: GenerateAdVideoInput
+): Promise<GenerateAdVideoOutput> {
   return generateAdVideoFlow(input);
 }
 
@@ -37,7 +39,7 @@ const generateAdVideoFlow = ai.defineFlow(
     outputSchema: GenerateAdVideoOutputSchema,
   },
   async input => {
-    let { operation } = await ai.generate({
+    let {operation} = await ai.generate({
       model: 'googleai/veo-2.0-generate-001',
       prompt: input.prompt,
       config: {
@@ -51,25 +53,25 @@ const generateAdVideoFlow = ai.defineFlow(
       throw new Error('Expected the model to return an operation');
     }
 
-    // Wait until the operation completes. Note that this may take some time, maybe even up to a minute. Design the UI accordingly.
+    // Wait until the operation completes. This may take up to a minute.
     while (!operation.done) {
       operation = await ai.checkOperation(operation);
       // Sleep for 5 seconds before checking again.
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 5000));
     }
 
     if (operation.error) {
       throw new Error('failed to generate video: ' + operation.error.message);
     }
 
-    const video = operation.output?.message?.content.find((p) => !!p.media);
+    const video = operation.output?.message?.content.find(p => !!p.media);
     if (!video) {
       throw new Error('Failed to find the generated video');
     }
 
     const videoDataUri = await downloadVideo(video as MediaPart);
 
-    return { videoDataUri };
+    return {videoDataUri};
   }
 );
 
