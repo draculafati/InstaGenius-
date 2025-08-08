@@ -5,28 +5,32 @@ import { generateAdHashtags } from "@/ai/flows/generate-ad-hashtags";
 import { generateAdImage } from "@/ai/flows/generate-ad-image";
 import { generateAdVideo } from "@/ai/flows/generate-ad-video";
 
-export async function generateAdContent(prompt: string) {
+export async function generateAdContent(prompt: string, mediaType: 'image' | 'video') {
   try {
-    console.log(`Generating ad content for prompt: ${prompt}`);
+    console.log(`Generating ad content for prompt: "${prompt}" with media type: ${mediaType}`);
 
-    // We run image and text generation first, as they are faster.
-    const [captionData, hashtagsData, imageData] = await Promise.all([
+    const [captionData, hashtagsData] = await Promise.all([
       generateAdCaption({ prompt }),
       generateAdHashtags({ prompt }),
-      generateAdImage({ prompt }),
     ]);
 
-    // Video generation is a long-running operation.
-    // We run it separately to allow other content to be generated first
-    // In a production app, this would be a background job.
-    const videoData = await generateAdVideo({ prompt });
+    let imageDataUri: string | undefined;
+    let videoDataUri: string | undefined;
+
+    if (mediaType === 'image') {
+      const imageData = await generateAdImage({ prompt });
+      imageDataUri = imageData.imageDataUri;
+    } else {
+      const videoData = await generateAdVideo({ prompt });
+      videoDataUri = videoData.videoDataUri;
+    }
 
     console.log("Ad content generation successful.");
     return {
       caption: captionData.caption,
       hashtags: hashtagsData.hashtags,
-      imageDataUri: imageData.imageDataUri,
-      videoDataUri: videoData.videoDataUri,
+      imageDataUri,
+      videoDataUri,
     };
   } catch (error) {
     console.error("Failed to generate ad content:", error);
