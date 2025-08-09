@@ -39,12 +39,6 @@ const generateAdImageFlow = ai.defineFlow(
       prompt: input.prompt,
       config: {
         responseModalities: ['TEXT', 'IMAGE'],
-        output: {
-          image: {
-            height: 1000,
-            width: 1000,
-          },
-        },
       },
     });
 
