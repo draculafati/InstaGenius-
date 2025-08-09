@@ -46,7 +46,7 @@ const generateAdVideoFlow = ai.defineFlow(
       prompt: input.prompt,
       config: {
         durationSeconds: 5,
-        aspectRatio: '16:9',
+        aspectRatio: '1:1',
       },
     });
 
