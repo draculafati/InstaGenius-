@@ -74,6 +74,13 @@ export function AdGeneratorForm() {
       };
 
       recognition.onerror = (event) => {
+        // The 'no-speech' error is triggered when the user doesn't say anything.
+        // We can safely ignore it to avoid showing an unnecessary error message.
+        if (event.error === 'no-speech') {
+          setIsRecording(false);
+          return;
+        }
+
         console.error("Speech recognition error", event.error);
         setIsRecording(false);
         toast({
