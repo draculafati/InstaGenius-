@@ -92,25 +92,30 @@ export function AdGeneratorForm() {
 
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
-        form.setValue("prompt", form.getValues("prompt") + transcript, { shouldValidate: true });
+        const currentPrompt = form.getValues("prompt");
+        // Append with a space if the current prompt is not empty
+        const newPrompt = currentPrompt ? `${currentPrompt} ${transcript}` : transcript;
+        form.setValue("prompt", newPrompt, { shouldValidate: true });
       };
 
       recognitionRef.current = recognition;
-    } else {
-        toast({
-          title: "Unsupported Browser",
-          description: "Speech recognition is not supported in your browser.",
-          variant: "destructive",
-        });
-    }
-
+    } 
+    // We don't need a toast here because handleMicClick will show a toast if recognitionRef.current is null
+    
     return () => {
       recognitionRef.current?.abort();
     };
   }, [form, toast]);
 
   const handleMicClick = () => {
-    if (!recognitionRef.current) return;
+    if (!recognitionRef.current) {
+        toast({
+          title: "Unsupported Browser",
+          description: "Speech recognition is not supported in your browser.",
+          variant: "destructive",
+        });
+      return;
+    }
 
     if (isRecording) {
       recognitionRef.current.stop();
