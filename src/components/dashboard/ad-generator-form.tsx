@@ -1,12 +1,12 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import Image from "next/image";
-import { Sparkles, Image as ImageIcon, Video, FileText, Loader2, Check } from "lucide-react";
+import { Sparkles, Image as ImageIcon, Video, FileText, Loader2, Check, Mic } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -30,11 +30,22 @@ type GeneratedContent = {
   videoDataUri?: string;
 };
 
+// Extend window to include webkitSpeechRecognition
+declare global {
+  interface Window {
+    SpeechRecognition: typeof SpeechRecognition;
+    webkitSpeechRecognition: typeof SpeechRecognition;
+  }
+}
+
 export function AdGeneratorForm() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -45,6 +56,71 @@ export function AdGeneratorForm() {
   });
 
   const mediaType = form.watch("mediaType");
+
+  useEffect(() => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+        setIsRecording(true);
+      };
+
+      recognition.onend = () => {
+        setIsRecording(false);
+      };
+
+      recognition.onerror = (event) => {
+        console.error("Speech recognition error", event.error);
+        setIsRecording(false);
+        toast({
+          title: "Speech Recognition Error",
+          description: `An error occurred: ${event.error}. Please ensure you have given microphone permissions.`,
+          variant: "destructive",
+        });
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        form.setValue("prompt", transcript, { shouldValidate: true });
+      };
+
+      recognitionRef.current = recognition;
+    } else {
+        toast({
+          title: "Unsupported Browser",
+          description: "Speech recognition is not supported in your browser.",
+          variant: "destructive",
+        });
+    }
+
+    return () => {
+      recognitionRef.current?.abort();
+    };
+  }, [form, toast]);
+
+  const handleMicClick = () => {
+    if (!recognitionRef.current) return;
+
+    if (isRecording) {
+      recognitionRef.current.stop();
+    } else {
+      try {
+        recognitionRef.current.start();
+      } catch (err) {
+        console.error("Error starting speech recognition:", err);
+         toast({
+          title: "Could not start recording",
+          description: `Please ensure microphone permissions are granted and try again.`,
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
@@ -86,12 +162,25 @@ export function AdGeneratorForm() {
                 <FormItem>
                    <FormLabel className="text-foreground">Ad Prompt</FormLabel>
                   <FormControl>
-                    <Textarea
-                      placeholder="e.g., 'A summer sale for our new skincare line, focused on hydration.'"
-                      className="resize-none bg-background/70 border-input/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/50"
-                      rows={3}
-                      {...field}
-                    />
+                    <div className="relative">
+                      <Textarea
+                        placeholder="e.g., 'A summer sale for our new skincare line, focused on hydration.'"
+                        className="resize-none bg-background/70 border-input/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/50 pr-10"
+                        rows={3}
+                        {...field}
+                      />
+                       <button
+                        type="button"
+                        onClick={handleMicClick}
+                        className={cn(
+                          "absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full transition-colors",
+                          isRecording ? "bg-red-500/80 text-white" : "text-muted-foreground hover:bg-muted"
+                        )}
+                        aria-label={isRecording ? "Stop recording" : "Start recording"}
+                      >
+                        <Mic className="h-5 w-5" />
+                      </button>
+                    </div>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
