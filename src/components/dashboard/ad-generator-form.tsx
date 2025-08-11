@@ -361,5 +361,3 @@ export function AdGeneratorForm() {
     </div>
   );
 }
-
-    
