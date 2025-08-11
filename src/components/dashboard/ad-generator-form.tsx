@@ -92,7 +92,7 @@ export function AdGeneratorForm() {
 
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
-        form.setValue("prompt", transcript, { shouldValidate: true });
+        form.setValue("prompt", form.getValues("prompt") + transcript, { shouldValidate: true });
       };
 
       recognitionRef.current = recognition;
@@ -356,3 +356,5 @@ export function AdGeneratorForm() {
     </div>
   );
 }
+
+    
