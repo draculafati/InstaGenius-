@@ -2,6 +2,9 @@
 /**
  * @fileoverview Service for interacting with the Instagram Graph API.
  */
+import { FormData } from 'formdata-node';
+import { fileTypeFromBuffer } from 'file-type';
+
 
 const API_VERSION = 'v20.0';
 const BASE_URL = `https://graph.facebook.com/${API_VERSION}`;
@@ -58,36 +61,66 @@ async function uploadMedia(
   mediaDataUri: string,
   mediaType: 'image' | 'video'
 ): Promise<string> {
-  const fetch = (await import('node-fetch')).default;
+    const fetch = (await import('node-fetch')).default;
 
-  const form = new URLSearchParams();
-  form.append('access_token', accessToken);
-  form.append('caption', caption);
+    // 1. Create Media Container
+    const containerUrl = `${BASE_URL}/${businessAccountId}/media`;
+    const containerParams = new URLSearchParams({
+        media_type: mediaType === 'image' ? 'IMAGE' : 'VIDEO',
+        caption: caption,
+        access_token: accessToken,
+    });
 
-  let uploadUrl = `${BASE_URL}/${businessAccountId}/media`;
+    const containerResponse = await fetch(containerUrl, {
+        method: 'POST',
+        body: containerParams,
+    });
+    const containerJson = (await containerResponse.json()) as any;
+    if (!containerResponse.ok || !containerJson.id) {
+        console.error('Instagram API Error (createContainer):', containerJson.error);
+        throw new Error(containerJson.error?.message || 'Failed to create media container.');
+    }
+    const containerId = containerJson.id;
+    console.log(`Successfully created media container with ID: ${containerId}`);
 
-  if (mediaType === 'image') {
-    form.append('image_url', mediaDataUri);
-  } else {
-    // For video, we initiate an async upload.
-    form.append('media_type', 'VIDEO');
-    form.append('video_url', mediaDataUri);
-  }
+    // 2. Upload the actual media file
+    const uploadUrl = `${BASE_URL}/${containerId}`;
+    
+    // Convert data URI to buffer
+    const base64Data = mediaDataUri.split(',')[1];
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    const fileDetails = await fileTypeFromBuffer(buffer);
+    if (!fileDetails) {
+        throw new Error('Could not determine file type from data URI.');
+    }
+    
+    const formData = new FormData();
+    formData.append('access_token', accessToken);
+    
+    // We need to use node-fetch's Blob equivalent for this to work
+    const { Blob } = await import('buffer');
+    const blob = new Blob([buffer]);
+    
+    // The API expects a file, so we create a blob and append it.
+    // The filename is not critical but good practice to include.
+    formData.append('source', blob, `upload.${fileDetails.ext}`);
+    
+    // Important: When using FormData with node-fetch, you should NOT set the Content-Type header manually.
+    // It will be set automatically with the correct boundary.
+    const uploadResponse = await fetch(uploadUrl, {
+        method: 'POST',
+        body: formData,
+    });
 
-  const response = await fetch(uploadUrl, {
-    method: 'POST',
-    body: form,
-  });
+    const uploadJson = (await uploadResponse.json()) as any;
+    if (!uploadResponse.ok || !uploadJson.success) {
+        console.error('Instagram API Error (uploadMedia):', uploadJson.error || uploadJson);
+        throw new Error(uploadJson.error?.message || 'Failed to upload media file to Instagram.');
+    }
 
-  const json = (await response.json()) as any;
-  if (!response.ok || !json.id) {
-    console.error('Instagram API Error (uploadMedia):', json.error);
-    throw new Error(
-      json.error?.message || 'Failed to upload media to Instagram.'
-    );
-  }
-
-  return json.id;
+    console.log(`Successfully uploaded media for container ID: ${containerId}`);
+    return containerId;
 }
 
 
@@ -154,6 +187,6 @@ async function publishMediaContainer(
       json.error?.message || 'Failed to publish media container.'
     );
   }
-
+  console.log(`Successfully published post with ID: ${json.id}`);
   return json.id;
 }
