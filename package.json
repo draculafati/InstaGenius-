@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "npm run genkit:start",
+    "dev": "genkit start --watch src/ai/dev.ts",
     "genkit:start": "genkit start",
     "genkit:dev": "genkit start",
-    "genkit:watch": "genkit start",
+    "genkit:watch": "genkit start --watch src/ai/dev.ts",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
