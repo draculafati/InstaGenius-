@@ -1,3 +1,4 @@
+
 import Image from "next/image";
 import { Ad } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";

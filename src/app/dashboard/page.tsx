@@ -1,3 +1,4 @@
+
 import { AdsHistoryList } from "@/components/dashboard/ads-history-list";
 import { History } from "lucide-react";
 
