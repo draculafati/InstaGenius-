@@ -47,7 +47,7 @@ export function AdGeneratorForm() {
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
-    defaultValues: { 
+    defaultValues: {
       prompt: "",
       mediaType: "image",
     },
@@ -72,8 +72,6 @@ export function AdGeneratorForm() {
       };
 
       recognition.onerror = (event) => {
-        // The 'no-speech' error is triggered when the user doesn't say anything.
-        // We can safely ignore it to avoid showing an unnecessary error message.
         if (event.error === 'no-speech') {
           setIsRecording(false);
           return;
@@ -91,14 +89,13 @@ export function AdGeneratorForm() {
       recognition.onresult = (event) => {
         const transcript = event.results[0][0].transcript;
         const currentPrompt = form.getValues("prompt");
-        // Append with a space if the current prompt is not empty
         const newPrompt = currentPrompt ? `${currentPrompt} ${transcript}` : transcript;
         form.setValue("prompt", newPrompt, { shouldValidate: true });
       };
 
       recognitionRef.current = recognition;
-    } 
-    
+    }
+
     return () => {
       recognitionRef.current?.abort();
     };
@@ -154,18 +151,18 @@ export function AdGeneratorForm() {
   async function handleSaveAd() {
     if (!generatedContent) return;
     setIsSaving(true);
-    
+
     try {
       const adToSave = {
         prompt: form.getValues("prompt"),
         caption: generatedContent.caption,
         hashtags: generatedContent.hashtags,
-        imageUrl: generatedContent.imageDataUri || generatedContent.videoDataUri || "", 
+        imageUrl: generatedContent.imageDataUri || generatedContent.videoDataUri || "",
         createdAt: serverTimestamp(),
       };
-      
+
       await addDoc(collection(db, "ads"), adToSave);
-      
+
       toast({
         title: "Ad Saved!",
         description: "Your generated ad has been saved to your history.",
@@ -291,9 +288,9 @@ export function AdGeneratorForm() {
                 </FormItem>
               )}
             />
-            <Button 
-              type="submit" 
-              disabled={isLoading} 
+            <Button
+              type="submit"
+              disabled={isLoading}
               size="lg"
               className="w-full text-lg bg-primary text-primary-foreground hover:bg-primary/90 h-12"
             >
@@ -339,7 +336,7 @@ export function AdGeneratorForm() {
             <Card className="md:col-span-2 bg-card/50 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><FileText /> Generated Caption & Hashtags</CardTitle>
-              </Header>
+              </CardHeader>
               <CardContent className="space-y-4">
                 <Skeleton className="h-24 w-full bg-muted/50" />
                 <div className="flex gap-2">
@@ -351,7 +348,7 @@ export function AdGeneratorForm() {
             </Card>
         </div>
       )}
-      
+
       {error && !isLoading && (
         <Card className="border-destructive bg-destructive/20 text-destructive-foreground">
           <CardHeader>
