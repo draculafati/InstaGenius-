@@ -30,6 +30,10 @@ export async function publishToInstagram(
       mediaDataUri,
       mediaType
     );
+
+    // After uploading, we need to poll until the container is ready.
+    await pollForContainerReady(accessToken, containerId);
+
     const creationId = await publishMediaContainer(
       accessToken,
       businessAccountId,
@@ -65,10 +69,9 @@ async function uploadMedia(
   if (mediaType === 'image') {
     form.append('image_url', mediaDataUri);
   } else {
+    // For video, we initiate an async upload.
     form.append('media_type', 'VIDEO');
     form.append('video_url', mediaDataUri);
-    // When creating a video container from a URL, you must check for completion via webhooks or polling.
-    // The current polling implementation will handle this.
   }
 
   const response = await fetch(uploadUrl, {
@@ -78,13 +81,52 @@ async function uploadMedia(
 
   const json = (await response.json()) as any;
   if (!response.ok || !json.id) {
-    console.error('Instagram API Error:', json.error);
+    console.error('Instagram API Error (uploadMedia):', json.error);
     throw new Error(
       json.error?.message || 'Failed to upload media to Instagram.'
     );
   }
 
   return json.id;
+}
+
+
+/**
+ * Polls the media container status until it is ready (FINISHED).
+ */
+async function pollForContainerReady(
+  accessToken: string,
+  containerId: string
+): Promise<void> {
+  const fetch = (await import('node-fetch')).default;
+  const statusUrl = `${BASE_URL}/${containerId}?fields=status_code,status&access_token=${accessToken}`;
+
+  for (let i = 0; i < 20; i++) { // Poll for up to 100 seconds
+    const statusResponse = await fetch(statusUrl);
+    const statusJson = (await statusResponse.json()) as any;
+
+    if (!statusResponse.ok) {
+        console.error('Instagram API Error (pollForContainerReady):', statusJson.error);
+        throw new Error(statusJson.error?.message || 'Failed to get container status.');
+    }
+
+    const statusCode = statusJson.status_code;
+
+    if (statusCode === 'FINISHED') {
+      console.log('Media container is ready.');
+      return;
+    }
+
+    if (statusCode === 'ERROR' || statusCode === 'EXPIRED') {
+      throw new Error(`Media container processing failed with status: ${statusJson.status}`);
+    }
+
+    console.log(`Container status: ${statusCode}. Polling again in 5 seconds...`);
+    // Wait for 5 seconds before the next poll.
+    await new Promise(resolve => setTimeout(resolve, 5000));
+  }
+
+  throw new Error('Media container processing timed out.');
 }
 
 
@@ -103,66 +145,15 @@ async function publishMediaContainer(
   form.append('access_token', accessToken);
   form.append('creation_id', containerId);
 
-  // We need to poll for completion
-  const creationId = await pollForCompletion(
-    url,
-    'POST',
-    form,
-    accessToken,
-    businessAccountId,
-    containerId
-  );
+  const response = await fetch(url, { method: 'POST', body: form });
+  const json = (await response.json()) as any;
 
-  return creationId;
-}
-
-/**
- * Polls the Instagram Graph API until the media container is published.
- */
-async function pollForCompletion(
-  url: string,
-  method: string,
-  body: URLSearchParams,
-  accessToken: string,
-  businessAccountId: string,
-  containerId: string
-): Promise<string> {
-  const fetch = (await import('node-fetch')).default;
-
-  const initialResponse = await fetch(url, { method, body });
-  const initialJson = (await initialResponse.json()) as any;
-
-  if (!initialResponse.ok || !initialJson.id) {
+  if (!response.ok || !json.id) {
+     console.error('Instagram API Error (publishMediaContainer):', json.error);
     throw new Error(
-      initialJson.error?.message || 'Failed to initiate media publishing.'
+      json.error?.message || 'Failed to publish media container.'
     );
   }
 
-  const statusUrl = `${BASE_URL}/${containerId}?fields=status_code,status&access_token=${accessToken}`;
-
-  for (let i = 0; i < 10; i++) {
-    // Poll every 5 seconds
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    const statusResponse = await fetch(statusUrl);
-    const statusJson = (await statusResponse.json()) as any;
-
-    if (!statusResponse.ok) {
-      throw new Error(
-        statusJson.error?.message || 'Failed to get publishing status.'
-      );
-    }
-    if (statusJson.status_code === 'FINISHED') {
-      return initialJson.id;
-    }
-    if (
-      statusJson.status_code === 'ERROR' ||
-      statusJson.status_code === 'EXPIRED'
-    ) {
-      throw new Error(
-        `Media publishing failed with status: ${statusJson.status}`
-      );
-    }
-  }
-
-  throw new Error('Publishing timed out.');
+  return json.id;
 }
