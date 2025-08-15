@@ -77,7 +77,20 @@ export function AdGeneratorForm() {
     setError(null);
 
     let mediaDataUri: string | undefined = undefined;
-    let finalMediaType: 'image' | 'video' = mediaType === 'video' || mediaType === 'upload_video' ? 'video' : 'image';
+    let finalMediaType: 'image' | 'video';
+
+    switch (values.mediaType) {
+        case 'video':
+        case 'upload_video':
+            finalMediaType = 'video';
+            break;
+        case 'image':
+        case 'upload_image':
+        default:
+            finalMediaType = 'image';
+            break;
+    }
+
 
     // Handle uploaded file
     if ((values.mediaType === 'upload_image' || values.mediaType === 'upload_video') && values.mediaFile && values.mediaFile.length > 0) {
@@ -441,5 +454,3 @@ export function AdGeneratorForm() {
     </div>
   );
 }
-
-    
