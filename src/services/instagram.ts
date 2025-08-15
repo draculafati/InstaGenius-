@@ -50,10 +50,6 @@ export async function publishToInstagram(
 
 /**
  * Uploads media to Instagram and returns a container ID.
- * This is a two-step process for videos:
- * 1. Create a media container.
- * 2. Upload the video file to the container.
- * For images, it can be done in one step, but we use a similar process for consistency.
  */
 async function uploadMedia(
   accessToken: string,
@@ -63,27 +59,17 @@ async function uploadMedia(
   mediaType: 'image' | 'video'
 ): Promise<string> {
   const fetch = (await import('node-fetch')).default;
-  const { Blob } = await import('buffer');
 
-  // Convert data URI to buffer
   const base64Data = mediaDataUri.split(',')[1];
   if (!base64Data) {
     throw new Error('Invalid data URI provided.');
   }
   const buffer = Buffer.from(base64Data, 'base64');
   const fileDetails = await fileTypeFromBuffer(buffer);
-  
-  if (mediaType === 'image') {
-    // For images, we can upload directly while creating the container.
-    const url = `${BASE_URL}/${businessAccountId}/media`;
-    const blob = new Blob([buffer], { type: fileDetails?.mime || 'image/jpeg' });
-    
-    const formData = new FormData();
-    formData.append('access_token', accessToken);
-    formData.append('caption', caption);
-    formData.append('image_file', blob, 'upload.jpg');
 
-    const response = await fetch(url, { method: 'POST', body: formData as any });
+  if (mediaType === 'image') {
+    const url = `${BASE_URL}/${businessAccountId}/media?image_url=${encodeURIComponent(mediaDataUri)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`;
+    const response = await fetch(url, { method: 'POST' });
     const json = await response.json() as any;
     
     if (!response.ok || !json.id) {
@@ -94,7 +80,6 @@ async function uploadMedia(
     return json.id;
 
   } else { // mediaType === 'video'
-     // Step 1: Create a media container for the video
     const createContainerUrl = `${BASE_URL}/${businessAccountId}/media`;
     const createContainerParams = new URLSearchParams({
         media_type: 'VIDEO',
@@ -116,7 +101,6 @@ async function uploadMedia(
     const containerId = createContainerJson.id;
     console.log(`Successfully created video container with ID: ${containerId}`);
 
-    // Step 2: Upload the video file to the container
     const uploadUrl = `${BASE_URL}/${containerId}`;
     const uploadResponse = await fetch(
         uploadUrl,
@@ -177,7 +161,6 @@ async function pollForContainerReady(
 
   throw new Error('Media container processing timed out.');
 }
-
 
 /**
  * Publishes a media container to the user's Instagram feed.
