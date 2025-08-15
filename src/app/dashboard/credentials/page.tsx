@@ -1,22 +1,100 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { KeyRound } from "lucide-react";
+import { KeyRound, Loader2 } from "lucide-react";
+import { auth, db } from "@/lib/firebase";
+import { doc, setDoc, getDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 
 export default function CredentialsPage() {
   const { toast } = useToast();
+  const [accessToken, setAccessToken] = useState("");
+  const [businessAccountId, setBusinessAccountId] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    // In a real app, this would securely save the credentials.
-    toast({
-      title: "Credentials Saved",
-      description: "Your Meta API credentials have been saved.",
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setUserId(user.uid);
+        // Fetch existing credentials
+        const userDocRef = doc(db, "users", user.uid);
+        const userDoc = await getDoc(userDocRef);
+        if (userDoc.exists()) {
+          const data = userDoc.data();
+          setAccessToken(data.instagramAccessToken || "");
+          setBusinessAccountId(data.instagramBusinessAccountId || "");
+        }
+      } else {
+        // Handle user not logged in
+        toast({
+            title: "Not Authenticated",
+            description: "You must be logged in to manage credentials.",
+            variant: "destructive",
+        });
+      }
+      setIsLoading(false);
     });
+
+    return () => unsubscribe();
+  }, [toast]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userId) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to save credentials.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!accessToken || !businessAccountId) {
+        toast({
+            title: "Missing Fields",
+            description: "Please fill out both fields.",
+            variant: "destructive"
+        });
+        return;
+    }
+
+
+    setIsSaving(true);
+    try {
+      const userDocRef = doc(db, "users", userId);
+      await setDoc(userDocRef, {
+          instagramAccessToken: accessToken,
+          instagramBusinessAccountId: businessAccountId,
+      }, { merge: true }); // merge:true prevents overwriting other user data
+
+      toast({
+        title: "Credentials Saved",
+        description: "Your Instagram API credentials have been saved.",
+      });
+    } catch (error) {
+        console.error("Error saving credentials:", error);
+        toast({
+            title: "Save Failed",
+            description: "Could not save credentials. Please try again.",
+            variant: "destructive",
+        });
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   return (
@@ -27,36 +105,54 @@ export default function CredentialsPage() {
           API Credentials
         </h1>
         <p className="text-muted-foreground mt-1">
-          Manage your Meta API credentials here.
+          Manage your Instagram API credentials here.
         </p>
       </div>
 
       <Card className="max-w-2xl">
         <CardHeader>
-          <CardTitle>Meta API Settings</CardTitle>
+          <CardTitle>Instagram API Settings</CardTitle>
           <CardDescription>
-            Enter your access token and other details to connect your account.
+            Enter your access token and Instagram Business Account ID.
           </CardDescription>
         </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="accessToken">Access Token</Label>
-              <Input id="accessToken" type="password" placeholder="Enter your access token" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="pageId">Page ID</Label>
-              <Input id="pageId" placeholder="Enter your Page ID" />
-            </div>
-             <div className="space-y-2">
-              <Label htmlFor="adAccountId">Ad Account ID</Label>
-              <Input id="adAccountId" placeholder="Enter your Ad Account ID" />
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button type="submit">Save Credentials</Button>
-          </CardFooter>
-        </form>
+        {isLoading ? (
+            <CardContent>
+                <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+            </CardContent>
+        ) : (
+            <form onSubmit={handleSubmit}>
+            <CardContent className="space-y-6">
+                <div className="space-y-2">
+                <Label htmlFor="accessToken">Access Token</Label>
+                <Input
+                    id="accessToken"
+                    type="password"
+                    placeholder="Enter your access token"
+                    value={accessToken}
+                    onChange={(e) => setAccessToken(e.target.value)}
+                    disabled={isSaving}
+                />
+                </div>
+                <div className="space-y-2">
+                <Label htmlFor="businessAccountId">Instagram Business Account ID</Label>
+                <Input
+                    id="businessAccountId"
+                    placeholder="Enter your Business Account ID"
+                    value={businessAccountId}
+                    onChange={(e) => setBusinessAccountId(e.target.value)}
+                    disabled={isSaving}
+                />
+                </div>
+            </CardContent>
+            <CardFooter>
+                <Button type="submit" disabled={isSaving}>
+                    {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Credentials
+                </Button>
+            </CardFooter>
+            </form>
+        )}
       </Card>
     </div>
   );
