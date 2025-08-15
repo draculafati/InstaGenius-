@@ -7,6 +7,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import Image from "next/image";
 import { Sparkles, Image as ImageIcon, Video, FileText, Loader2, Check, Mic } from "lucide-react";
+import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -41,6 +43,7 @@ declare global {
 export function AdGeneratorForm() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -154,12 +157,37 @@ export function AdGeneratorForm() {
     setIsLoading(false);
   }
 
-  function handleSaveAd() {
-    // In a real app, this would save the ad to the database.
-    toast({
-      title: "Ad Saved!",
-      description: "Your generated ad has been saved to your history.",
-    });
+  async function handleSaveAd() {
+    if (!generatedContent) return;
+    setIsSaving(true);
+    
+    try {
+      const adToSave = {
+        prompt: form.getValues("prompt"),
+        caption: generatedContent.caption,
+        hashtags: generatedContent.hashtags,
+        // In a real app, you would upload the image/video to a storage service (like Firebase Storage)
+        // and save the URL. For this example, we'll save the data URI directly, which is not recommended for production.
+        imageUrl: generatedContent.imageDataUri || generatedContent.videoDataUri || "", 
+        createdAt: serverTimestamp(),
+      };
+      
+      await addDoc(collection(db, "ads"), adToSave);
+      
+      toast({
+        title: "Ad Saved!",
+        description: "Your generated ad has been saved to your history.",
+      });
+    } catch (error) {
+        console.error("Error saving ad:", error);
+        toast({
+          title: "Save Failed",
+          description: "Could not save the ad. Please check the console for errors.",
+          variant: "destructive",
+        });
+    } finally {
+        setIsSaving(false);
+    }
   }
 
   return (
@@ -351,9 +379,18 @@ export function AdGeneratorForm() {
                  </div>
             </div>
             <div className="flex justify-end">
-                <Button onClick={handleSaveAd} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                  <Check className="mr-2 h-4 w-4" />
-                  Save Ad
+                <Button onClick={handleSaveAd} disabled={isSaving} className="bg-primary text-primary-foreground hover:bg-primary/90">
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Save Ad
+                    </>
+                  )}
                 </Button>
             </div>
         </div>
