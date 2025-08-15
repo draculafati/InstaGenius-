@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "genkit start --watch src/ai/dev.ts",
+    "dev": "genkit start",
     "genkit:start": "genkit start",
     "genkit:dev": "genkit start",
     "genkit:watch": "genkit start --watch src/ai/dev.ts",
