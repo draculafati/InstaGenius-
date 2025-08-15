@@ -9,7 +9,7 @@ import { publishInstagramPost } from "@/ai/flows/publish-instagram-post";
 import type { GeneratedAdContent } from "@/lib/types";
 
 
-export async function generateAdContent(prompt: string, mediaType: 'image' | 'video') {
+export async function generateAdContent(prompt: string, mediaType: 'image' | 'video', mediaDataUri?: string) {
   try {
     console.log(`Generating ad content for prompt: "${prompt}" with media type: ${mediaType}`);
 
@@ -21,12 +21,20 @@ export async function generateAdContent(prompt: string, mediaType: 'image' | 'vi
     let imageDataUri: string | undefined;
     let videoDataUri: string | undefined;
 
-    if (mediaType === 'image') {
-      const imageData = await generateAdImage({ prompt });
-      imageDataUri = imageData.imageDataUri;
+    if (mediaDataUri) {
+      if (mediaType === 'image') {
+        imageDataUri = mediaDataUri;
+      } else {
+        videoDataUri = mediaDataUri;
+      }
     } else {
-      const videoData = await generateAdVideo({ prompt });
-      videoDataUri = videoData.videoDataUri;
+      if (mediaType === 'image') {
+        const imageData = await generateAdImage({ prompt });
+        imageDataUri = imageData.imageDataUri;
+      } else {
+        const videoData = await generateAdVideo({ prompt });
+        videoDataUri = videoData.videoDataUri;
+      }
     }
 
     console.log("Ad content generation successful.");
