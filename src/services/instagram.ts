@@ -2,7 +2,6 @@
 /**
  * @fileoverview Service for interacting with the Instagram Graph API.
  */
-import { fromBuffer } from 'file-type';
 
 const API_VERSION = 'v20.0';
 const BASE_URL = `https://graph.facebook.com/${API_VERSION}`;
@@ -57,13 +56,14 @@ async function uploadMedia(
 ): Promise<string> {
   const fetch = (await import('node-fetch')).default;
   const { FormData, Blob } = await import('formdata-node');
+  const { fileTypeFromBuffer } = await import('file-type');
 
   const mediaBuffer = Buffer.from(
     mediaDataUri.substring(mediaDataUri.indexOf(',') + 1),
     'base64'
   );
 
-  const fileType = await fromBuffer(mediaBuffer);
+  const fileType = await fileTypeFromBuffer(mediaBuffer);
   if (!fileType) {
     throw new Error('Could not determine file type from data URI.');
   }
