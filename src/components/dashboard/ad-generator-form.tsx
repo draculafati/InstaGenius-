@@ -136,14 +136,16 @@ export function AdGeneratorForm() {
     }
 
     try {
-      const adToSave = {
-        prompt: form.getValues("prompt"),
-        caption: generatedContent.caption,
-        hashtags: generatedContent.hashtags,
-        imageUrl: generatedContent.imageDataUri || generatedContent.videoDataUri || "",
-        createdAt: serverTimestamp(),
-        userId: currentUser.uid,
-      };
+        const adToSave = {
+            prompt: form.getValues("prompt"),
+            caption: generatedContent.caption,
+            hashtags: generatedContent.hashtags,
+            // If it's a video, store a placeholder, otherwise store the image URI.
+            // This prevents hitting Firestore document size limits with large video data URIs.
+            imageUrl: generatedContent.videoDataUri ? 'https://placehold.co/600x400.png?text=Video+Ad' : generatedContent.imageDataUri || "",
+            createdAt: serverTimestamp(),
+            userId: currentUser.uid,
+        };
 
       await addDoc(collection(db, "ads"), adToSave);
 
@@ -454,3 +456,5 @@ export function AdGeneratorForm() {
     </div>
   );
 }
+
+    
