@@ -16,22 +16,22 @@ import { useToast } from "@/hooks/use-toast";
 import { KeyRound, Loader2 } from "lucide-react";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc, getDoc } from "firebase/firestore";
-import { onAuthStateChanged } from "firebase/auth";
+import { onAuthStateChanged, User } from "firebase/auth";
 
 export default function CredentialsPage() {
   const { toast } = useToast();
   const [accessToken, setAccessToken] = useState("");
   const [businessAccountId, setBusinessAccountId] = useState("");
-  const [userId, setUserId] = useState<string | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        setUserId(user.uid);
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
         // Fetch existing credentials
-        const userDocRef = doc(db, "users", user.uid);
+        const userDocRef = doc(db, "users", currentUser.uid);
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
           const data = userDoc.data();
@@ -39,7 +39,7 @@ export default function CredentialsPage() {
           setBusinessAccountId(data.instagramBusinessAccountId || "");
         }
       } else {
-        // Handle user not logged in
+        setUser(null);
         toast({
             title: "Not Authenticated",
             description: "You must be logged in to manage credentials.",
@@ -54,7 +54,7 @@ export default function CredentialsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userId) {
+    if (!user) {
       toast({
         title: "Error",
         description: "You must be logged in to save credentials.",
@@ -75,7 +75,7 @@ export default function CredentialsPage() {
 
     setIsSaving(true);
     try {
-      const userDocRef = doc(db, "users", userId);
+      const userDocRef = doc(db, "users", user.uid);
       await setDoc(userDocRef, {
           instagramAccessToken: accessToken,
           instagramBusinessAccountId: businessAccountId,
@@ -131,7 +131,7 @@ export default function CredentialsPage() {
                     placeholder="Enter your access token"
                     value={accessToken}
                     onChange={(e) => setAccessToken(e.target.value)}
-                    disabled={isSaving}
+                    disabled={isSaving || !user}
                 />
                 </div>
                 <div className="space-y-2">
@@ -141,12 +141,12 @@ export default function CredentialsPage() {
                     placeholder="Enter your Business Account ID"
                     value={businessAccountId}
                     onChange={(e) => setBusinessAccountId(e.target.value)}
-                    disabled={isSaving}
+                    disabled={isSaving || !user}
                 />
                 </div>
             </CardContent>
             <CardFooter>
-                <Button type="submit" disabled={isSaving}>
+                <Button type="submit" disabled={isSaving || !user}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Save Credentials
                 </Button>
