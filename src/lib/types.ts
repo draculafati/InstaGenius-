@@ -1,3 +1,4 @@
+
 export interface Ad {
   id: string;
   prompt: string;
@@ -6,3 +7,10 @@ export interface Ad {
   imageUrl: string; // This can be a data URI for image or video
   createdAt: string; // Stored as an ISO string
 }
+
+export type GeneratedAdContent = {
+  caption: string;
+  hashtags: string[];
+  imageDataUri?: string;
+  videoDataUri?: string;
+};

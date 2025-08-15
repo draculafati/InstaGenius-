@@ -1,9 +1,14 @@
+
 "use server";
 
 import { generateAdCaption } from "@/ai/flows/generate-ad-caption";
 import { generateAdHashtags } from "@/ai/flows/generate-ad-hashtags";
 import { generateAdImage } from "@/ai/flows/generate-ad-image";
 import { generateAdVideo } from "@/ai/flows/generate-ad-video";
+import { publishInstagramPost } from "@/ai/flows/publish-instagram-post";
+import type { GeneratedAdContent } from "@/lib/types";
+import { auth } from "@/lib/firebase";
+
 
 export async function generateAdContent(prompt: string, mediaType: 'image' | 'video') {
   try {
@@ -35,5 +40,26 @@ export async function generateAdContent(prompt: string, mediaType: 'image' | 'vi
   } catch (error) {
     console.error("Failed to generate ad content:", error);
     return { error: "An error occurred during content generation. Please check the server logs." };
+  }
+}
+
+export async function publishAdToInstagram(
+  adContent: GeneratedAdContent,
+) {
+   if (!auth.currentUser) {
+    return { error: 'Authentication required to publish.' };
+  }
+  try {
+    const result = await publishInstagramPost({
+      userId: auth.currentUser.uid,
+      caption: adContent.caption,
+      hashtags: adContent.hashtags,
+      mediaDataUri: adContent.imageDataUri || adContent.videoDataUri || "",
+      mediaType: adContent.imageDataUri ? 'image' : 'video',
+    });
+    return result;
+  } catch (error: any) {
+    console.error('Failed to publish to Instagram:', error);
+    return { error: error.message || 'An unexpected error occurred during publishing.' };
   }
 }

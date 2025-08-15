@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import Image from "next/image";
-import { Sparkles, Image as ImageIcon, Video, FileText, Loader2, Check, Mic } from "lucide-react";
+import { Sparkles, Image as ImageIcon, Video, FileText, Loader2, Check, Mic, Send } from "lucide-react";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -17,20 +17,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
-import { generateAdContent } from "./actions";
+import { generateAdContent, publishAdToInstagram } from "./actions";
 import { cn } from "@/lib/utils";
+import type { GeneratedAdContent } from "@/lib/types";
 
 const formSchema = z.object({
   prompt: z.string().min(10, { message: "Prompt must be at least 10 characters." }),
   mediaType: z.enum(["image", "video"]),
 });
-
-type GeneratedContent = {
-  caption: string;
-  hashtags: string[];
-  imageDataUri?: string;
-  videoDataUri?: string;
-};
 
 // Extend window to include webkitSpeechRecognition
 declare global {
@@ -44,7 +38,8 @@ export function AdGeneratorForm() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [generatedContent, setGeneratedContent] = useState<GeneratedContent | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [generatedContent, setGeneratedContent] = useState<GeneratedAdContent | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
@@ -103,7 +98,6 @@ export function AdGeneratorForm() {
 
       recognitionRef.current = recognition;
     } 
-    // We don't need a toast here because handleMicClick will show a toast if recognitionRef.current is null
     
     return () => {
       recognitionRef.current?.abort();
@@ -152,7 +146,7 @@ export function AdGeneratorForm() {
         variant: "destructive",
       });
     } else {
-      setGeneratedContent(result);
+      setGeneratedContent(result as GeneratedAdContent);
     }
     setIsLoading(false);
   }
@@ -166,8 +160,6 @@ export function AdGeneratorForm() {
         prompt: form.getValues("prompt"),
         caption: generatedContent.caption,
         hashtags: generatedContent.hashtags,
-        // In a real app, you would upload the image/video to a storage service (like Firebase Storage)
-        // and save the URL. For this example, we'll save the data URI directly, which is not recommended for production.
         imageUrl: generatedContent.imageDataUri || generatedContent.videoDataUri || "", 
         createdAt: serverTimestamp(),
       };
@@ -188,6 +180,28 @@ export function AdGeneratorForm() {
     } finally {
         setIsSaving(false);
     }
+  }
+
+  async function handlePublish() {
+    if (!generatedContent) return;
+    setIsPublishing(true);
+
+    const result = await publishAdToInstagram(generatedContent);
+
+    if (result.error) {
+      toast({
+        title: "Publishing Failed",
+        description: result.error,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Published Successfully!",
+        description: "Your ad has been posted to Instagram.",
+      });
+    }
+
+    setIsPublishing(false);
   }
 
   return (
@@ -378,8 +392,8 @@ export function AdGeneratorForm() {
                     </Card>
                  </div>
             </div>
-            <div className="flex justify-end">
-                <Button onClick={handleSaveAd} disabled={isSaving} className="bg-primary text-primary-foreground hover:bg-primary/90">
+            <div className="flex justify-end gap-4">
+                <Button onClick={handleSaveAd} disabled={isSaving || isPublishing} className="bg-primary text-primary-foreground hover:bg-primary/90">
                   {isSaving ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -389,6 +403,19 @@ export function AdGeneratorForm() {
                     <>
                       <Check className="mr-2 h-4 w-4" />
                       Save Ad
+                    </>
+                  )}
+                </Button>
+                <Button onClick={handlePublish} disabled={isPublishing || isSaving} variant="secondary">
+                  {isPublishing ? (
+                     <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Publishing...
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-2 h-4 w-4" />
+                      Publish to Instagram
                     </>
                   )}
                 </Button>
