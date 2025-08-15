@@ -58,72 +58,89 @@ async function uploadMedia(
   mediaDataUri: string,
   mediaType: 'image' | 'video'
 ): Promise<string> {
-  const fetch = (await import('node-fetch')).default;
+    const fetch = (await import('node-fetch')).default;
 
-  const base64Data = mediaDataUri.split(',')[1];
-  if (!base64Data) {
-    throw new Error('Invalid data URI provided.');
-  }
-  const buffer = Buffer.from(base64Data, 'base64');
-  const fileDetails = await fileTypeFromBuffer(buffer);
-
-  if (mediaType === 'image') {
-    const url = `${BASE_URL}/${businessAccountId}/media?image_url=${encodeURIComponent(mediaDataUri)}&caption=${encodeURIComponent(caption)}&access_token=${accessToken}`;
-    const response = await fetch(url, { method: 'POST' });
-    const json = await response.json() as any;
-    
-    if (!response.ok || !json.id) {
-        console.error('Instagram API Error (uploadImage):', json.error);
-        throw new Error(json.error?.message || 'Failed to upload image.');
+    const base64Data = mediaDataUri.split(',')[1];
+    if (!base64Data) {
+        throw new Error('Invalid data URI provided.');
     }
-    console.log(`Successfully created image container with ID: ${json.id}`);
-    return json.id;
+    const buffer = Buffer.from(base64Data, 'base64');
+    const fileDetails = await fileTypeFromBuffer(buffer);
 
-  } else { // mediaType === 'video'
-    const createContainerUrl = `${BASE_URL}/${businessAccountId}/media`;
-    const createContainerParams = new URLSearchParams({
-        media_type: 'VIDEO',
-        video_type: 'REELS',
-        caption: caption,
-        access_token: accessToken,
-    });
-    
-    const createContainerResponse = await fetch(createContainerUrl, {
-        method: 'POST',
-        body: createContainerParams,
-    });
+    let url: string;
+    let params: URLSearchParams;
 
-    const createContainerJson = await createContainerResponse.json() as any;
-    if (!createContainerResponse.ok || !createContainerJson.id) {
-        console.error('Instagram API Error (create video container):', createContainerJson.error);
-        throw new Error(createContainerJson.error?.message || 'Failed to create video container.');
-    }
-    const containerId = createContainerJson.id;
-    console.log(`Successfully created video container with ID: ${containerId}`);
+    if (mediaType === 'image') {
+        url = `${BASE_URL}/${businessAccountId}/media`;
+        params = new URLSearchParams({
+            caption: caption,
+            access_token: accessToken,
+        });
 
-    const uploadUrl = `${BASE_URL}/${containerId}`;
-    const uploadResponse = await fetch(
-        uploadUrl,
-        {
+        // For images, we can upload directly if it's not a URL
+        const uploadResponse = await fetch(`${url}?${params.toString()}`, {
             method: 'POST',
             headers: {
-                Authorization: `OAuth ${accessToken}`,
-                'Content-Type': fileDetails?.mime || 'video/mp4',
-                'Content-Length': buffer.length.toString(),
+                'Content-Type': fileDetails?.mime || 'image/jpeg',
             },
             body: buffer,
-        }
-    );
+        });
+        const json = await uploadResponse.json() as any;
 
-    const uploadJson = await uploadResponse.json() as any;
-    if (!uploadResponse.ok || !uploadJson.success) {
-        console.error('Instagram API Error (upload video file):', uploadJson.error || uploadJson);
-        throw new Error(uploadJson.error?.message || 'Failed to upload video file to Instagram.');
+        if (!uploadResponse.ok || !json.id) {
+            console.error('Instagram API Error (uploadImage):', json.error);
+            throw new Error(json.error?.message || 'Failed to upload image.');
+        }
+        console.log(`Successfully created image container with ID: ${json.id}`);
+        return json.id;
+
+    } else { // mediaType === 'video'
+        // Step 1: Create a media container
+        url = `${BASE_URL}/${businessAccountId}/media`;
+        params = new URLSearchParams({
+            media_type: 'VIDEO',
+            video_type: 'REELS', // Or 'FEED' if you want non-reels
+            caption: caption,
+            access_token: accessToken,
+        });
+
+        const createContainerResponse = await fetch(url, {
+            method: 'POST',
+            body: params,
+        });
+        const createContainerJson = await createContainerResponse.json() as any;
+        if (!createContainerResponse.ok || !createContainerJson.id) {
+            console.error('Instagram API Error (create video container):', createContainerJson.error);
+            throw new Error(createContainerJson.error?.message || 'Failed to create video container.');
+        }
+        const containerId = createContainerJson.id;
+        console.log(`Successfully created video container with ID: ${containerId}`);
+        
+        // Step 2: Upload the video file to the container
+        const uploadUrl = `${BASE_URL}/${containerId}`;
+        const uploadResponse = await fetch(
+            uploadUrl,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `OAuth ${accessToken}`,
+                    'Content-Type': fileDetails?.mime || 'application/octet-stream',
+                    'Content-Length': buffer.length.toString(),
+                },
+                body: buffer,
+            }
+        );
+
+        const uploadJson = await uploadResponse.json() as any;
+        if (!uploadResponse.ok || !uploadJson.success) {
+            console.error('Instagram API Error (upload video file):', uploadJson.error || uploadJson);
+            throw new Error(uploadJson.error?.message || 'Failed to upload video file to Instagram.');
+        }
+        console.log(`Successfully uploaded video file to container ID: ${containerId}`);
+        return containerId;
     }
-    console.log(`Successfully uploaded video file to container ID: ${containerId}`);
-    return containerId;
-  }
 }
+
 
 /**
  * Polls the media container status until it is ready (FINISHED).
@@ -133,7 +150,7 @@ async function pollForContainerReady(
   containerId: string
 ): Promise<void> {
   const fetch = (await import('node-fetch')).default;
-  const statusUrl = `${BASE_URL}/${containerId}?fields=status_code&access_token=${accessToken}`;
+  const statusUrl = `${BASE_URL}/${containerId}?fields=status_code,status&access_token=${accessToken}`;
 
   for (let i = 0; i < 20; i++) { // Poll for up to 100 seconds
     const statusResponse = await fetch(statusUrl);
