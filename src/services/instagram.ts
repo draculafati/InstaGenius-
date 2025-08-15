@@ -2,9 +2,7 @@
 /**
  * @fileoverview Service for interacting with the Instagram Graph API.
  */
-import { FormData } from 'formdata-node';
 import { fileTypeFromBuffer } from 'file-type';
-
 
 const API_VERSION = 'v20.0';
 const BASE_URL = `https://graph.facebook.com/${API_VERSION}`;
@@ -34,7 +32,6 @@ export async function publishToInstagram(
       mediaType
     );
 
-    // After uploading, we need to poll until the container is ready.
     await pollForContainerReady(accessToken, containerId);
 
     const creationId = await publishMediaContainer(
@@ -53,6 +50,10 @@ export async function publishToInstagram(
 
 /**
  * Uploads media to Instagram and returns a container ID.
+ * This is a two-step process for videos:
+ * 1. Create a media container.
+ * 2. Upload the video file to the container.
+ * For images, it can be done in one step, but we use a similar process for consistency.
  */
 async function uploadMedia(
   accessToken: string,
@@ -61,96 +62,84 @@ async function uploadMedia(
   mediaDataUri: string,
   mediaType: 'image' | 'video'
 ): Promise<string> {
-    const fetch = (await import('node-fetch')).default;
+  const fetch = (await import('node-fetch')).default;
+  const { Blob } = await import('buffer');
 
-    // Convert data URI to buffer
-    const base64Data = mediaDataUri.split(',')[1];
-    if (!base64Data) {
-        throw new Error('Invalid data URI provided.');
-    }
-    const buffer = Buffer.from(base64Data, 'base64');
+  // Convert data URI to buffer
+  const base64Data = mediaDataUri.split(',')[1];
+  if (!base64Data) {
+    throw new Error('Invalid data URI provided.');
+  }
+  const buffer = Buffer.from(base64Data, 'base64');
+  const fileDetails = await fileTypeFromBuffer(buffer);
+  
+  if (mediaType === 'image') {
+    // For images, we can upload directly while creating the container.
+    const url = `${BASE_URL}/${businessAccountId}/media`;
+    const blob = new Blob([buffer], { type: fileDetails?.mime || 'image/jpeg' });
     
-    // 1. Initiate Upload Session (for resumable uploads, required for videos)
-    // For images, we can do a direct upload, but using resumable for both is simpler.
-    const uploadSessionUrl = `${BASE_URL}/${businessAccountId}/media`;
-    const fileDetails = await fileTypeFromBuffer(buffer);
-    const fileSize = buffer.length;
+    const formData = new FormData();
+    formData.append('access_token', accessToken);
+    formData.append('caption', caption);
+    formData.append('image_file', blob, 'upload.jpg');
 
-    const sessionParams = new URLSearchParams({
-        file_length: fileSize.toString(),
-        media_type: mediaType === 'image' ? 'IMAGE' : 'VIDEO',
+    const response = await fetch(url, { method: 'POST', body: formData as any });
+    const json = await response.json() as any;
+    
+    if (!response.ok || !json.id) {
+        console.error('Instagram API Error (uploadImage):', json.error);
+        throw new Error(json.error?.message || 'Failed to upload image.');
+    }
+    console.log(`Successfully created image container with ID: ${json.id}`);
+    return json.id;
+
+  } else { // mediaType === 'video'
+     // Step 1: Create a media container for the video
+    const createContainerUrl = `${BASE_URL}/${businessAccountId}/media`;
+    const createContainerParams = new URLSearchParams({
+        media_type: 'VIDEO',
+        video_type: 'REELS',
+        caption: caption,
         access_token: accessToken,
     });
     
-    const sessionResponse = await fetch(uploadSessionUrl, {
+    const createContainerResponse = await fetch(createContainerUrl, {
         method: 'POST',
-        body: sessionParams,
+        body: createContainerParams,
     });
 
-    const sessionJson = (await sessionResponse.json()) as any;
-    if (!sessionResponse.ok || !sessionJson.id) {
-        console.error('Instagram API Error (create upload session):', sessionJson.error);
-        throw new Error(sessionJson.error?.message || 'Failed to create upload session.');
+    const createContainerJson = await createContainerResponse.json() as any;
+    if (!createContainerResponse.ok || !createContainerJson.id) {
+        console.error('Instagram API Error (create video container):', createContainerJson.error);
+        throw new Error(createContainerJson.error?.message || 'Failed to create video container.');
     }
-    const uploadSessionId = sessionJson.id;
-    console.log(`Successfully created upload session with ID: ${uploadSessionId}`);
+    const containerId = createContainerJson.id;
+    console.log(`Successfully created video container with ID: ${containerId}`);
 
-    // 2. Upload the file content to the session ID
+    // Step 2: Upload the video file to the container
+    const uploadUrl = `${BASE_URL}/${containerId}`;
     const uploadResponse = await fetch(
-        `${BASE_URL}/${uploadSessionId}`,
+        uploadUrl,
         {
             method: 'POST',
             headers: {
                 Authorization: `OAuth ${accessToken}`,
-                'Content-Type': fileDetails?.mime || (mediaType === 'image' ? 'image/jpeg' : 'video/mp4'),
-                'Content-Length': fileSize.toString(),
-                'X-Entity-Name': `upload.${fileDetails?.ext || 'bin'}`,
-                'X-Entity-Length': fileSize.toString(),
-                'offset': '0',
+                'Content-Type': fileDetails?.mime || 'video/mp4',
+                'Content-Length': buffer.length.toString(),
             },
             body: buffer,
         }
     );
-    
+
     const uploadJson = await uploadResponse.json() as any;
     if (!uploadResponse.ok || !uploadJson.success) {
-        console.error('Instagram API Error (upload media file):', uploadJson.error || uploadJson);
-        throw new Error(uploadJson.error?.message || 'Failed to upload media file to Instagram.');
+        console.error('Instagram API Error (upload video file):', uploadJson.error || uploadJson);
+        throw new Error(uploadJson.error?.message || 'Failed to upload video file to Instagram.');
     }
-    
-    console.log(`Successfully uploaded media for session ID: ${uploadSessionId}`);
-
-    // 3. Create the media container with the uploaded media
-    const containerUrl = `${BASE_URL}/${businessAccountId}/media`;
-    const containerParams = new URLSearchParams({
-        media_type: mediaType === 'image' ? 'IMAGE' : 'VIDEO',
-        caption: caption,
-        access_token: accessToken,
-        upload_id: uploadSessionId,
-    });
-
-    if (mediaType === 'video') {
-       containerParams.set('media_type', 'VIDEO');
-    }
-
-    const containerResponse = await fetch(containerUrl, {
-        method: 'POST',
-        body: containerParams,
-    });
-
-    const containerJson = (await containerResponse.json()) as any;
-
-     if (!containerResponse.ok || !containerJson.id) {
-        console.error('Instagram API Error (createContainer):', containerJson.error);
-        throw new Error(containerJson.error?.message || 'Failed to create media container from upload session.');
-    }
-    
-    const containerId = containerJson.id;
-    console.log(`Successfully created media container with ID: ${containerId}`);
-
+    console.log(`Successfully uploaded video file to container ID: ${containerId}`);
     return containerId;
+  }
 }
-
 
 /**
  * Polls the media container status until it is ready (FINISHED).
@@ -160,15 +149,15 @@ async function pollForContainerReady(
   containerId: string
 ): Promise<void> {
   const fetch = (await import('node-fetch')).default;
-  const statusUrl = `${BASE_URL}/${containerId}?fields=status_code,status&access_token=${accessToken}`;
+  const statusUrl = `${BASE_URL}/${containerId}?fields=status_code&access_token=${accessToken}`;
 
   for (let i = 0; i < 20; i++) { // Poll for up to 100 seconds
     const statusResponse = await fetch(statusUrl);
     const statusJson = (await statusResponse.json()) as any;
 
     if (!statusResponse.ok) {
-        console.error('Instagram API Error (pollForContainerReady):', statusJson.error);
-        throw new Error(statusJson.error?.message || 'Failed to get container status.');
+      console.error('Instagram API Error (pollForContainerReady):', statusJson.error);
+      throw new Error(statusJson.error?.message || 'Failed to get container status.');
     }
 
     const statusCode = statusJson.status_code;
@@ -179,11 +168,10 @@ async function pollForContainerReady(
     }
 
     if (statusCode === 'ERROR' || statusCode === 'EXPIRED') {
-      throw new Error(`Media container processing failed with status: ${statusJson.status}`);
+       throw new Error(`Media container processing failed with status: ${statusJson.status_code}. Status: ${statusJson.status}`);
     }
 
     console.log(`Container status: ${statusCode}. Polling again in 5 seconds...`);
-    // Wait for 5 seconds before the next poll.
     await new Promise(resolve => setTimeout(resolve, 5000));
   }
 
@@ -210,7 +198,7 @@ async function publishMediaContainer(
   const json = (await response.json()) as any;
 
   if (!response.ok || !json.id) {
-     console.error('Instagram API Error (publishMediaContainer):', json.error);
+    console.error('Instagram API Error (publishMediaContainer):', json.error);
     throw new Error(
       json.error?.message || 'Failed to publish media container.'
     );

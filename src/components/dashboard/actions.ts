@@ -13,9 +13,12 @@ export async function generateAdContent(prompt: string, mediaType: 'image' | 'vi
   try {
     console.log(`Generating ad content for prompt: "${prompt}" with media type: ${mediaType}`);
 
+    // If media is uploaded, pass it to the caption/hashtag generation.
+    const generationPrompt = { prompt };
+
     const [captionData, hashtagsData] = await Promise.all([
-      generateAdCaption({ prompt }),
-      generateAdHashtags({ prompt }),
+      generateAdCaption(generationPrompt),
+      generateAdHashtags(generationPrompt),
     ]);
 
     let imageDataUri: string | undefined;

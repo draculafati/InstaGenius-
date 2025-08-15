@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -59,6 +60,8 @@ const formSchema = z
     }
   );
 
+type FormValues = z.infer<typeof formSchema>;
+
 export function AdGeneratorForm() {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
@@ -68,11 +71,12 @@ export function AdGeneratorForm() {
   const [error, setError] = useState<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-  const form = useForm<z.infer<typeof formSchema>>({
+  const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       prompt: "",
       mediaType: "image",
+      mediaFile: undefined,
     },
   });
 
@@ -92,43 +96,38 @@ export function AdGeneratorForm() {
     }
   }, [mediaFile]);
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
+  async function onSubmit(values: FormValues) {
     setIsLoading(true);
     setGeneratedContent(null);
     setError(null);
 
     let mediaDataUri: string | undefined = undefined;
-    let finalMediaType: "image" | "video";
-
-    switch (values.mediaType) {
-      case "video":
-      case "upload_video":
-        finalMediaType = "video";
-        break;
-      case "image":
-      case "upload_image":
-      default:
-        finalMediaType = "image";
-        break;
-    }
+    const isUpload = values.mediaType.startsWith("upload_");
+    const finalMediaType = values.mediaType.includes("video") ? "video" : "image";
 
     // Handle uploaded file
-    if (
-      (values.mediaType === "upload_image" || values.mediaType === "upload_video") &&
-      values.mediaFile &&
-      values.mediaFile.length > 0
-    ) {
+    if (isUpload && values.mediaFile && values.mediaFile.length > 0) {
       const file = values.mediaFile[0];
-      mediaDataUri = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          resolve(event.target?.result as string);
-        };
-        reader.onerror = (error) => {
-          reject(error);
-        };
-        reader.readAsDataURL(file);
-      });
+      try {
+        mediaDataUri = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            if (event.target?.result) {
+              resolve(event.target.result as string);
+            } else {
+              reject(new Error("Failed to read file."));
+            }
+          };
+          reader.onerror = (error) => reject(error);
+          reader.readAsDataURL(file);
+        });
+      } catch (e) {
+        const err = e as Error;
+        setError(err.message);
+        toast({ title: "File Read Error", description: err.message, variant: "destructive" });
+        setIsLoading(false);
+        return;
+      }
     }
 
     // Call server action to generate content
@@ -216,7 +215,7 @@ export function AdGeneratorForm() {
     } else {
       toast({
         title: "Published Successfully!",
-        description: "Your ad has been posted to Instagram.",
+        description: `Your ad has been posted to Instagram with ID: ${result.postId}`,
       });
       await handleSaveAd();
     }
