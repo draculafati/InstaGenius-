@@ -5,9 +5,6 @@
   "private": true,
   "scripts": {
     "dev": "genkit start",
-    "genkit:start": "genkit start",
-    "genkit:dev": "genkit start",
-    "genkit:watch": "genkit start --watch src/ai/dev.ts",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
