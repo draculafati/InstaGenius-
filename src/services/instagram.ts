@@ -32,6 +32,12 @@ export async function publishToInstagram(
       mediaType
     );
 
+    // For images, the container is the final post. For videos, we need to poll and publish.
+    if (mediaType === 'image') {
+        console.log(`Successfully published image post with ID: ${containerId}`);
+        return containerId;
+    }
+    
     await pollForContainerReady(accessToken, containerId);
 
     const creationId = await publishMediaContainer(
@@ -67,17 +73,14 @@ async function uploadMedia(
     const buffer = Buffer.from(base64Data, 'base64');
     const fileDetails = await fileTypeFromBuffer(buffer);
 
-    let url: string;
-    let params: URLSearchParams;
-
     if (mediaType === 'image') {
-        url = `${BASE_URL}/${businessAccountId}/media`;
-        params = new URLSearchParams({
+        const url = `${BASE_URL}/${businessAccountId}/media`;
+        const params = new URLSearchParams({
             caption: caption,
             access_token: accessToken,
         });
 
-        // For images, we can upload directly if it's not a URL
+        // For images, we can upload directly
         const uploadResponse = await fetch(`${url}?${params.toString()}`, {
             method: 'POST',
             headers: {
@@ -92,21 +95,22 @@ async function uploadMedia(
             throw new Error(json.error?.message || 'Failed to upload image.');
         }
         console.log(`Successfully created image container with ID: ${json.id}`);
+        // For simple image posts, the container ID is the post ID.
         return json.id;
 
     } else { // mediaType === 'video'
         // Step 1: Create a media container
-        url = `${BASE_URL}/${businessAccountId}/media`;
-        params = new URLSearchParams({
+        const createContainerUrl = `${BASE_URL}/${businessAccountId}/media`;
+        const createContainerParams = new URLSearchParams({
             media_type: 'VIDEO',
-            video_type: 'REELS', // Or 'FEED' if you want non-reels
+            video_type: 'REELS',
             caption: caption,
             access_token: accessToken,
         });
 
-        const createContainerResponse = await fetch(url, {
+        const createContainerResponse = await fetch(createContainerUrl, {
             method: 'POST',
-            body: params,
+            body: createContainerParams,
         });
         const createContainerJson = await createContainerResponse.json() as any;
         if (!createContainerResponse.ok || !createContainerJson.id) {
@@ -116,7 +120,7 @@ async function uploadMedia(
         const containerId = createContainerJson.id;
         console.log(`Successfully created video container with ID: ${containerId}`);
         
-        // Step 2: Upload the video file to the container
+        // Step 2: Upload the video file to the container's URL
         const uploadUrl = `${BASE_URL}/${containerId}`;
         const uploadResponse = await fetch(
             uploadUrl,
