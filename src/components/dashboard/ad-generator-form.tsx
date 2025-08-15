@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
@@ -77,12 +77,11 @@ export function AdGeneratorForm() {
     setError(null);
 
     let mediaDataUri: string | undefined = undefined;
-    let finalMediaType: 'image' | 'video' = 'image';
+    let finalMediaType: 'image' | 'video' = mediaType === 'video' || mediaType === 'upload_video' ? 'video' : 'image';
 
     // Handle uploaded file
     if ((values.mediaType === 'upload_image' || values.mediaType === 'upload_video') && values.mediaFile && values.mediaFile.length > 0) {
         const file = values.mediaFile[0];
-        finalMediaType = values.mediaType === 'upload_image' ? 'image' : 'video';
         mediaDataUri = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (event) => {
@@ -116,6 +115,13 @@ export function AdGeneratorForm() {
     if (!generatedContent) return;
     setIsSaving(true);
 
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+        toast({ title: "Authentication Error", description: "You must be logged in to save an ad.", variant: "destructive" });
+        setIsSaving(false);
+        return;
+    }
+
     try {
       const adToSave = {
         prompt: form.getValues("prompt"),
@@ -123,6 +129,7 @@ export function AdGeneratorForm() {
         hashtags: generatedContent.hashtags,
         imageUrl: generatedContent.imageDataUri || generatedContent.videoDataUri || "",
         createdAt: serverTimestamp(),
+        userId: currentUser.uid,
       };
 
       await addDoc(collection(db, "ads"), adToSave);
@@ -171,6 +178,8 @@ export function AdGeneratorForm() {
         title: "Published Successfully!",
         description: "Your ad has been posted to Instagram.",
       });
+      // Also save the ad after successful publishing
+      await handleSaveAd();
     }
 
     setIsPublishing(false);
@@ -314,7 +323,7 @@ export function AdGeneratorForm() {
             {(mediaType === 'image' || mediaType === 'upload_image') && (
               <Card className="bg-card/50 backdrop-blur-sm md:col-span-2">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><ImageIcon /> {mediaType === 'image' ? 'Generated' : 'Uploaded'} Image</CardTitle>
+                  <CardTitle className="flex items-center gap-2"><ImageIcon /> {mediaType.startsWith('generate') ? 'Generated' : 'Uploaded'} Image</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <Skeleton className="aspect-video w-full bg-muted/50" />
@@ -324,7 +333,7 @@ export function AdGeneratorForm() {
             {(mediaType === 'video' || mediaType === 'upload_video') && (
               <Card className="bg-card/50 backdrop-blur-sm md:col-span-2">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2"><Video /> {mediaType === 'video' ? 'Generated' : 'Uploaded'} Video</CardTitle>
+                  <CardTitle className="flex items-center gap-2"><Video /> {mediaType.startsWith('generate') ? 'Generated' : 'Uploaded'} Video</CardTitle>
                 </CardHeader>
                 <CardContent>
                    <Skeleton className="aspect-video w-full bg-muted/50" />
@@ -335,7 +344,7 @@ export function AdGeneratorForm() {
             <Card className="md:col-span-2 bg-card/50 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><FileText /> Generated Caption & Hashtags</CardTitle>
-              </Header>
+              </CardHeader>
               <CardContent className="space-y-4">
                 <Skeleton className="h-24 w-full bg-muted/50" />
                 <div className="flex gap-2">
@@ -366,7 +375,7 @@ export function AdGeneratorForm() {
                 {generatedContent.imageDataUri && (
                     <Card className="bg-card/50 backdrop-blur-sm md:col-span-2">
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-foreground"><ImageIcon /> {mediaType === 'image' ? 'Generated' : 'Uploaded'} Image</CardTitle>
+                            <CardTitle className="flex items-center gap-2 text-foreground"><ImageIcon /> {mediaType.includes('generate') ? 'Generated' : 'Uploaded'} Image</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <Image src={generatedContent.imageDataUri} alt="Ad Image" width={1920} height={1080} className="rounded-lg border" />
@@ -376,7 +385,7 @@ export function AdGeneratorForm() {
                  {generatedContent.videoDataUri && (
                     <Card className="bg-card/50 backdrop-blur-sm md:col-span-2">
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-foreground"><Video /> {mediaType === 'video' ? 'Generated' : 'Uploaded'} Video</CardTitle>
+                            <CardTitle className="flex items-center gap-2 text-foreground"><Video /> {mediaType.includes('generate') ? 'Generated' : 'Uploaded'} Video</CardTitle>
                         </CardHeader>
                         <CardContent>
                             <video src={generatedContent.videoDataUri} controls className="w-full rounded-lg border" />
@@ -432,3 +441,5 @@ export function AdGeneratorForm() {
     </div>
   );
 }
+
+    
