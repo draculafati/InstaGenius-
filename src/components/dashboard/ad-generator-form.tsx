@@ -47,7 +47,7 @@ const formSchema = z
     (data) => {
       if (
         (data.mediaType === "upload_image" || data.mediaType === "upload_video") &&
-        !data.mediaFile
+        (!data.mediaFile || data.mediaFile.length === 0)
       ) {
         return false;
       }
@@ -167,9 +167,7 @@ export function AdGeneratorForm() {
         prompt: form.getValues("prompt"),
         caption: generatedContent.caption,
         hashtags: generatedContent.hashtags,
-        imageUrl: generatedContent.videoDataUri
-          ? "https://placehold.co/600x400.png?text=Video+Ad"
-          : generatedContent.imageDataUri || "",
+        imageUrl: generatedContent.imageDataUri || (generatedContent.videoDataUri ? "https://placehold.co/600x400.png?text=Video+Ad" : ""),
         createdAt: serverTimestamp(),
         userId: currentUser.uid,
       };
@@ -230,7 +228,234 @@ export function AdGeneratorForm() {
 
   return (
     <div className="space-y-8">
-      {/* --- rest of your JSX stays exactly the same --- */}
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+          <FormField
+            control={form.control}
+            name="prompt"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel className="text-lg font-semibold">
+                  Ad Prompt
+                </FormLabel>
+                <FormControl>
+                  <Textarea
+                    placeholder="e.g., A vibrant ad for a new line of eco-friendly sneakers, showing them in nature."
+                    className="min-h-[120px] text-base"
+                    {...field}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="mediaType"
+            render={({ field }) => (
+              <FormItem className="space-y-4">
+                <FormLabel className="text-lg font-semibold">
+                  Media Type
+                </FormLabel>
+                <FormControl>
+                  <div className="grid grid-cols-2 gap-4">
+                    <Button
+                      type="button"
+                      variant={field.value === "image" ? "default" : "outline"}
+                      className="h-24 flex-col gap-2"
+                      onClick={() => field.onChange("image")}
+                    >
+                      <ImageIcon className="h-8 w-8" />
+                      <span>Generate Image</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={field.value === "video" ? "default" : "outline"}
+                      className="h-24 flex-col gap-2"
+                      onClick={() => field.onChange("video")}
+                    >
+                      <Video className="h-8 w-8" />
+                      <span>Generate Video</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={field.value === "upload_image" ? "default" : "outline"}
+                      className="h-24 flex-col gap-2"
+                      onClick={() => field.onChange("upload_image")}
+                    >
+                      <Upload className="h-8 w-8" />
+                      <span>Upload Image</span>
+                    </Button>
+                     <Button
+                      type="button"
+                      variant={field.value === "upload_video" ? "default" : "outline"}
+                      className="h-24 flex-col gap-2"
+                      onClick={() => field.onChange("upload_video")}
+                    >
+                      <Upload className="h-8 w-8" />
+                      <span>Upload Video</span>
+                    </Button>
+                  </div>
+                </FormControl>
+                 <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {(mediaType === "upload_image" || mediaType === "upload_video") && (
+            <FormField
+              control={form.control}
+              name="mediaFile"
+              render={({ field }) => (
+                 <FormItem>
+                  <FormLabel className="text-lg font-semibold">Upload File</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="file"
+                      accept={mediaType === "upload_image" ? "image/*" : "video/*"}
+                      {...fileRef}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          {previewUrl && (
+            <div className="flex justify-center">
+              {mediaType.includes('image') ? (
+                <Image
+                  src={previewUrl}
+                  alt="Uploaded preview"
+                  width={200}
+                  height={200}
+                  className="rounded-lg object-cover"
+                />
+              ) : (
+                <video src={previewUrl} controls className="w-full max-w-sm rounded-lg" />
+              )}
+            </div>
+          )}
+
+
+          <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="mr-2 h-4 w-4" />
+            )}
+            Generate Ad Content
+          </Button>
+        </form>
+      </Form>
+
+      {isLoading && (
+        <div className="space-y-6">
+          <Skeleton className="h-40 w-full" />
+          <Skeleton className="h-8 w-1/2" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-center text-sm text-destructive">
+          <p>{error}</p>
+        </div>
+      )}
+
+      {generatedContent && (
+        <div className="space-y-8 rounded-lg border bg-card p-6 shadow-sm">
+          <h2 className="text-2xl font-bold text-center">Generated Ad</h2>
+          <div className="space-y-6">
+            {(generatedContent.imageDataUri || generatedContent.videoDataUri) && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    {generatedContent.imageDataUri ? (
+                      <ImageIcon />
+                    ) : (
+                      <Video />
+                    )}
+                    Generated Media
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {generatedContent.imageDataUri ? (
+                    <Image
+                      src={generatedContent.imageDataUri}
+                      alt="Generated ad media"
+                      width={500}
+                      height={500}
+                      className="mx-auto rounded-lg"
+                    />
+                  ) : (
+                    <video src={generatedContent.videoDataUri} controls className="w-full rounded-lg" />
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText />
+                  Generated Caption
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-muted-foreground whitespace-pre-wrap">
+                  {generatedContent.caption}
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Sparkles />
+                  Generated Hashtags
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-wrap gap-2">
+                {generatedContent.hashtags.map((tag) => (
+                  <Badge key={tag} variant="secondary">
+                    {tag}
+                  </Badge>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-4">
+             <Button
+              onClick={handleSaveAd}
+              variant="outline"
+              className="w-full"
+              disabled={isSaving || isPublishing}
+            >
+              {isSaving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Check className="mr-2 h-4 w-4" />
+              )}
+              Save Ad
+            </Button>
+            <Button
+              onClick={handlePublish}
+              className="w-full"
+              disabled={isPublishing || isSaving}
+            >
+              {isPublishing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="mr-2 h-4 w-4" />
+              )}
+              Publish to Instagram
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

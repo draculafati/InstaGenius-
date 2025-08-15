@@ -63,68 +63,91 @@ async function uploadMedia(
 ): Promise<string> {
     const fetch = (await import('node-fetch')).default;
 
-    // 1. Create Media Container
+    // Convert data URI to buffer
+    const base64Data = mediaDataUri.split(',')[1];
+    if (!base64Data) {
+        throw new Error('Invalid data URI provided.');
+    }
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    // 1. Initiate Upload Session (for resumable uploads, required for videos)
+    // For images, we can do a direct upload, but using resumable for both is simpler.
+    const uploadSessionUrl = `${BASE_URL}/${businessAccountId}/media`;
+    const fileDetails = await fileTypeFromBuffer(buffer);
+    const fileSize = buffer.length;
+
+    const sessionParams = new URLSearchParams({
+        file_length: fileSize.toString(),
+        media_type: mediaType === 'image' ? 'IMAGE' : 'VIDEO',
+        access_token: accessToken,
+    });
+    
+    const sessionResponse = await fetch(uploadSessionUrl, {
+        method: 'POST',
+        body: sessionParams,
+    });
+
+    const sessionJson = (await sessionResponse.json()) as any;
+    if (!sessionResponse.ok || !sessionJson.id) {
+        console.error('Instagram API Error (create upload session):', sessionJson.error);
+        throw new Error(sessionJson.error?.message || 'Failed to create upload session.');
+    }
+    const uploadSessionId = sessionJson.id;
+    console.log(`Successfully created upload session with ID: ${uploadSessionId}`);
+
+    // 2. Upload the file content to the session ID
+    const uploadResponse = await fetch(
+        `${BASE_URL}/${uploadSessionId}`,
+        {
+            method: 'POST',
+            headers: {
+                Authorization: `OAuth ${accessToken}`,
+                'Content-Type': fileDetails?.mime || (mediaType === 'image' ? 'image/jpeg' : 'video/mp4'),
+                'Content-Length': fileSize.toString(),
+                'X-Entity-Name': `upload.${fileDetails?.ext || 'bin'}`,
+                'X-Entity-Length': fileSize.toString(),
+                'offset': '0',
+            },
+            body: buffer,
+        }
+    );
+    
+    const uploadJson = await uploadResponse.json() as any;
+    if (!uploadResponse.ok || !uploadJson.success) {
+        console.error('Instagram API Error (upload media file):', uploadJson.error || uploadJson);
+        throw new Error(uploadJson.error?.message || 'Failed to upload media file to Instagram.');
+    }
+    
+    console.log(`Successfully uploaded media for session ID: ${uploadSessionId}`);
+
+    // 3. Create the media container with the uploaded media
     const containerUrl = `${BASE_URL}/${businessAccountId}/media`;
     const containerParams = new URLSearchParams({
         media_type: mediaType === 'image' ? 'IMAGE' : 'VIDEO',
         caption: caption,
         access_token: accessToken,
+        upload_id: uploadSessionId,
     });
 
-    // For videos, we need to initiate a resumable upload session
     if (mediaType === 'video') {
-        containerParams.set('upload_type', 'resumable');
+       containerParams.set('media_type', 'VIDEO');
     }
 
     const containerResponse = await fetch(containerUrl, {
         method: 'POST',
         body: containerParams,
     });
+
     const containerJson = (await containerResponse.json()) as any;
-    if (!containerResponse.ok || !containerJson.id) {
+
+     if (!containerResponse.ok || !containerJson.id) {
         console.error('Instagram API Error (createContainer):', containerJson.error);
-        throw new Error(containerJson.error?.message || 'Failed to create media container.');
+        throw new Error(containerJson.error?.message || 'Failed to create media container from upload session.');
     }
+    
     const containerId = containerJson.id;
     console.log(`Successfully created media container with ID: ${containerId}`);
 
-    // 2. Upload the actual media file
-    const uploadUrl = `${BASE_URL}/${containerId}`;
-    
-    // Convert data URI to buffer
-    const base64Data = mediaDataUri.split(',')[1];
-    const buffer = Buffer.from(base64Data, 'base64');
-    
-    const fileDetails = await fileTypeFromBuffer(buffer);
-    if (!fileDetails) {
-        throw new Error('Could not determine file type from data URI.');
-    }
-    
-    const formData = new FormData();
-    formData.append('access_token', accessToken);
-    
-    // We need to use node-fetch's Blob equivalent for this to work
-    const { Blob } = await import('buffer');
-    const blob = new Blob([buffer]);
-    
-    // The API expects a file, so we create a blob and append it.
-    // The filename is not critical but good practice to include.
-    formData.append('source', blob, `upload.${fileDetails.ext}`);
-    
-    // Important: When using FormData with node-fetch, you should NOT set the Content-Type header manually.
-    // It will be set automatically with the correct boundary.
-    const uploadResponse = await fetch(uploadUrl, {
-        method: 'POST',
-        body: formData,
-    });
-
-    const uploadJson = (await uploadResponse.json()) as any;
-    if (!uploadResponse.ok || !uploadJson.success) {
-        console.error('Instagram API Error (uploadMedia):', uploadJson.error || uploadJson);
-        throw new Error(uploadJson.error?.message || 'Failed to upload media file to Instagram.');
-    }
-
-    console.log(`Successfully uploaded media for container ID: ${containerId}`);
     return containerId;
 }
 
