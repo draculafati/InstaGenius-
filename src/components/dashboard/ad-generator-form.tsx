@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 import Image from "next/image";
-import { Sparkles, Image as ImageIcon, Video, FileText, Loader2, Check, Mic, Send } from "lucide-react";
+import { Sparkles, Image as ImageIcon, Video, FileText, Loader2, Check, Send } from "lucide-react";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
 import { db, auth } from "@/lib/firebase";
 
@@ -26,13 +26,6 @@ const formSchema = z.object({
   mediaType: z.enum(["image", "video"]),
 });
 
-// Extend window to include webkitSpeechRecognition
-declare global {
-  interface Window {
-    SpeechRecognition: typeof SpeechRecognition;
-    webkitSpeechRecognition: typeof SpeechRecognition;
-  }
-}
 
 export function AdGeneratorForm() {
   const { toast } = useToast();
@@ -41,8 +34,6 @@ export function AdGeneratorForm() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [generatedContent, setGeneratedContent] = useState<GeneratedAdContent | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const recognitionRef = useRef<SpeechRecognition | null>(null);
 
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -54,79 +45,6 @@ export function AdGeneratorForm() {
   });
 
   const mediaType = form.watch("mediaType");
-
-  useEffect(() => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = false;
-      recognition.interimResults = false;
-      recognition.lang = 'en-US';
-
-      recognition.onstart = () => {
-        setIsRecording(true);
-      };
-
-      recognition.onend = () => {
-        setIsRecording(false);
-      };
-
-      recognition.onerror = (event) => {
-        if (event.error === 'no-speech') {
-          setIsRecording(false);
-          return;
-        }
-
-        console.error("Speech recognition error", event.error);
-        setIsRecording(false);
-        toast({
-          title: "Speech Recognition Error",
-          description: `An error occurred: ${event.error}. Please ensure you have given microphone permissions.`,
-          variant: "destructive",
-        });
-      };
-
-      recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        const currentPrompt = form.getValues("prompt");
-        const newPrompt = currentPrompt ? `${currentPrompt} ${transcript}` : transcript;
-        form.setValue("prompt", newPrompt, { shouldValidate: true });
-      };
-
-      recognitionRef.current = recognition;
-    }
-
-    return () => {
-      recognitionRef.current?.abort();
-    };
-  }, [form, toast]);
-
-  const handleMicClick = () => {
-    if (!recognitionRef.current) {
-        toast({
-          title: "Unsupported Browser",
-          description: "Speech recognition is not supported in your browser.",
-          variant: "destructive",
-        });
-      return;
-    }
-
-    if (isRecording) {
-      recognitionRef.current.stop();
-    } else {
-      try {
-        recognitionRef.current.start();
-      } catch (err) {
-        console.error("Error starting speech recognition:", err);
-         toast({
-          title: "Could not start recording",
-          description: `Please ensure microphone permissions are granted and try again.`,
-          variant: "destructive",
-        });
-      }
-    }
-  };
-
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     setIsLoading(true);
@@ -227,21 +145,10 @@ export function AdGeneratorForm() {
                     <div className="relative">
                       <Textarea
                         placeholder="e.g., 'A summer sale for our new skincare line, focused on hydration.'"
-                        className="resize-none bg-background/70 border-input/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/50 pr-10"
+                        className="resize-none bg-background/70 border-input/60 text-foreground placeholder:text-muted-foreground focus-visible:ring-primary/50"
                         rows={3}
                         {...field}
                       />
-                       <button
-                        type="button"
-                        onClick={handleMicClick}
-                        className={cn(
-                          "absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-full transition-colors",
-                          isRecording ? "bg-red-500/80 text-white" : "text-muted-foreground hover:bg-muted"
-                        )}
-                        aria-label={isRecording ? "Stop recording" : "Start recording"}
-                      >
-                        <Mic className="h-5 w-5" />
-                      </button>
                     </div>
                   </FormControl>
                   <FormMessage />
