@@ -71,6 +71,11 @@ async function uploadMedia(
         access_token: accessToken,
     });
 
+    // For videos, we need to initiate a resumable upload session
+    if (mediaType === 'video') {
+        containerParams.set('upload_type', 'resumable');
+    }
+
     const containerResponse = await fetch(containerUrl, {
         method: 'POST',
         body: containerParams,
