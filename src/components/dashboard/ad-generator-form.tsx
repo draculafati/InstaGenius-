@@ -8,7 +8,7 @@ import * as z from "zod";
 import Image from "next/image";
 import { Sparkles, Image as ImageIcon, Video, FileText, Loader2, Check, Mic, Send } from "lucide-react";
 import { collection, addDoc, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -184,9 +184,20 @@ export function AdGeneratorForm() {
 
   async function handlePublish() {
     if (!generatedContent) return;
+
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      toast({
+        title: "Authentication Error",
+        description: "You must be logged in to publish an ad.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsPublishing(true);
 
-    const result = await publishAdToInstagram(generatedContent);
+    const result = await publishAdToInstagram(generatedContent, currentUser.uid);
 
     if (result.error) {
       toast({
@@ -328,7 +339,7 @@ export function AdGeneratorForm() {
             <Card className="md:col-span-2 bg-card/50 backdrop-blur-sm">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><FileText /> Generated Caption & Hashtags</CardTitle>
-              </CardHeader>
+              </Header>
               <CardContent className="space-y-4">
                 <Skeleton className="h-24 w-full bg-muted/50" />
                 <div className="flex gap-2">

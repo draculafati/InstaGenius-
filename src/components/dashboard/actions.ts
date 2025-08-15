@@ -7,7 +7,6 @@ import { generateAdImage } from "@/ai/flows/generate-ad-image";
 import { generateAdVideo } from "@/ai/flows/generate-ad-video";
 import { publishInstagramPost } from "@/ai/flows/publish-instagram-post";
 import type { GeneratedAdContent } from "@/lib/types";
-import { auth } from "@/lib/firebase";
 
 
 export async function generateAdContent(prompt: string, mediaType: 'image' | 'video') {
@@ -45,13 +44,14 @@ export async function generateAdContent(prompt: string, mediaType: 'image' | 'vi
 
 export async function publishAdToInstagram(
   adContent: GeneratedAdContent,
+  userId: string,
 ) {
-   if (!auth.currentUser) {
+   if (!userId) {
     return { error: 'Authentication required to publish.' };
   }
   try {
     const result = await publishInstagramPost({
-      userId: auth.currentUser.uid,
+      userId: userId,
       caption: adContent.caption,
       hashtags: adContent.hashtags,
       mediaDataUri: adContent.imageDataUri || adContent.videoDataUri || "",
