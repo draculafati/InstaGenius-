@@ -55,35 +55,20 @@ async function uploadMedia(
   mediaType: 'image' | 'video'
 ): Promise<string> {
   const fetch = (await import('node-fetch')).default;
-  const { FormData, Blob } = await import('formdata-node');
-  const { fileTypeFromBuffer } = await import('file-type');
 
-  const mediaBuffer = Buffer.from(
-    mediaDataUri.substring(mediaDataUri.indexOf(',') + 1),
-    'base64'
-  );
-
-  const fileType = await fileTypeFromBuffer(mediaBuffer);
-  if (!fileType) {
-    throw new Error('Could not determine file type from data URI.');
-  }
-
-  const blob = new Blob([mediaBuffer], { type: fileType.mime });
-  const form = new FormData();
+  const form = new URLSearchParams();
   form.append('access_token', accessToken);
   form.append('caption', caption);
 
-  let uploadUrl;
+  let uploadUrl = `${BASE_URL}/${businessAccountId}/media`;
+
   if (mediaType === 'image') {
-    uploadUrl = `${BASE_URL}/${businessAccountId}/media`;
-    form.append('image', blob, `ad.${fileType.ext}`);
+    form.append('image_url', mediaDataUri);
   } else {
-    uploadUrl = `${BASE_URL}/${businessAccountId}/media`;
-    // For videos, the process is different (resumable upload, etc.)
-    // This is a simplified example. For production, you'd implement resumable uploads.
-    // For now, we will treat it similarly to an image upload for simplicity
     form.append('media_type', 'VIDEO');
-    form.append('video', blob, `ad.${fileType.ext}`);
+    form.append('video_url', mediaDataUri);
+    // When creating a video container from a URL, you must check for completion via webhooks or polling.
+    // The current polling implementation will handle this.
   }
 
   const response = await fetch(uploadUrl, {
@@ -101,6 +86,7 @@ async function uploadMedia(
 
   return json.id;
 }
+
 
 /**
  * Publishes a media container to the user's Instagram feed.
